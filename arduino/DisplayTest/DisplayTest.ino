@@ -1,23 +1,15 @@
 
 #include <Wire.h>
-#include <LiquidCrystal_I2C.h>
 #include <TFT_eSPI.h>
 
 // Definition der Mikrocontroller-Pins
 
 
-LiquidCrystal_I2C lcd( 0x27, 16, 2 );
-TFT_eSPI          disp;
-
+TFT_eSPI    disp;
+int         count = 0;
 
 void setup()
 {
-    
-    lcd.init();
-    lcd.backlight();
-    lcd.setCursor( 0, 0 );
-    lcd.print( "Hello World! :-)" );
-
     disp.init();
     disp.fillScreen( TFT_BLACK );
     disp.drawLine( 0, 0, 50, 100, TFT_BLUE );
@@ -32,4 +24,6 @@ void setup()
 
 void loop()
 {
+    disp.drawString(String(++count), 0, 100, 7);
+    delay( 10 );
 }
