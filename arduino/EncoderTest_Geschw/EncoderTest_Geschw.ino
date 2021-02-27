@@ -19,7 +19,7 @@ volatile int  lastCountLeft  = 0;
 volatile int  lastCountRight = 0;
 volatile int  speedLeft  = 0;
 volatile int  speedRight = 0;
-volatile bool changed    = false;
+volatile bool changed    = true;
 
 
 // Interrupt-Funktion (Interrupt Service Function = ISR) für den linken Sensor
