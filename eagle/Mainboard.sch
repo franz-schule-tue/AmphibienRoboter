@@ -13876,7 +13876,7 @@ high speed (Philips)</description>
 <part name="BATT1" library="bs_lib" deviceset="BATTERIEN" device="" value="NiMh, 6x1,2V"/>
 <part name="IC1" library="st-microelectronics" library_urn="urn:adsk.eagle:library:368" deviceset="L293D" device="" package3d_urn="urn:adsk.eagle:package:26820/1"/>
 <part name="REFL1" library="bs_lib" deviceset="REFLEXKOPPLER" device="SG-2BC" value="SG-2BC"/>
-<part name="REFL2" library="bs_lib" deviceset="REFLEXKOPPLER" device="SG-2BC"/>
+<part name="REFL2" library="bs_lib" deviceset="REFLEXKOPPLER" device="SG-2BC" value="SG-2BC"/>
 <part name="IC2" library="linear" library_urn="urn:adsk.eagle:library:262" deviceset="TLC272" device="P" package3d_urn="urn:adsk.eagle:package:16409/2"/>
 <part name="MOT1" library="bs_lib" deviceset="MOTOR" device=""/>
 <part name="MOT2" library="bs_lib" deviceset="MOTOR" device=""/>
@@ -14308,11 +14308,10 @@ high speed (Philips)</description>
 <pinref part="SV2" gate="G$1" pin="20"/>
 <wire x1="208.28" y1="106.68" x2="198.12" y2="106.68" width="0.1524" layer="91"/>
 <pinref part="REFL1" gate="G$1" pin="COL"/>
-<wire x1="63.5" y1="99.06" x2="63.5" y2="76.2" width="0.1524" layer="91"/>
-<wire x1="40.64" y1="99.06" x2="63.5" y2="99.06" width="0.1524" layer="91"/>
+<wire x1="63.5" y1="99.06" x2="63.5" y2="83.82" width="0.1524" layer="91"/>
+<wire x1="63.5" y1="83.82" x2="63.5" y2="76.2" width="0.1524" layer="91"/>
 <wire x1="147.32" y1="99.06" x2="63.5" y2="99.06" width="0.1524" layer="91"/>
 <junction x="147.32" y="99.06"/>
-<junction x="63.5" y="99.06"/>
 <pinref part="REFL2" gate="G$1" pin="A"/>
 <wire x1="149.86" y1="76.2" x2="147.32" y2="76.2" width="0.1524" layer="91"/>
 <wire x1="147.32" y1="76.2" x2="147.32" y2="83.82" width="0.1524" layer="91"/>
@@ -14326,13 +14325,15 @@ high speed (Philips)</description>
 <junction x="208.28" y="106.68"/>
 <pinref part="SV3" gate="G$1" pin="1"/>
 <wire x1="208.28" y1="144.78" x2="213.36" y2="144.78" width="0.1524" layer="91"/>
-<label x="45.72" y="99.06" size="1.778" layer="95"/>
+<label x="63.5" y="99.06" size="1.778" layer="95"/>
 <pinref part="R3" gate="G$1" pin="2"/>
 <pinref part="REFL1" gate="G$1" pin="A"/>
 <wire x1="45.72" y1="76.2" x2="40.64" y2="76.2" width="0.1524" layer="91"/>
 <wire x1="40.64" y1="76.2" x2="40.64" y2="38.1" width="0.1524" layer="91"/>
-<wire x1="40.64" y1="99.06" x2="40.64" y2="76.2" width="0.1524" layer="91"/>
 <junction x="40.64" y="76.2"/>
+<wire x1="40.64" y1="83.82" x2="40.64" y2="76.2" width="0.1524" layer="91"/>
+<wire x1="40.64" y1="83.82" x2="63.5" y2="83.82" width="0.1524" layer="91"/>
+<junction x="63.5" y="83.82"/>
 </segment>
 </net>
 <net name="N$1" class="0">

@@ -24,6 +24,7 @@ void setup()
 
 void loop()
 {
-    disp.drawString(String(++count), 0, 100, 7);
+    String str("000"+String(++count));
+    disp.drawString( str.substring(str.length() - 4), 0, 100, 7);
     delay( 10 );
 }
