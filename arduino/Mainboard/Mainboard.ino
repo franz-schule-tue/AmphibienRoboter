@@ -4,6 +4,9 @@
 
 // Definition der Mikrocontroller-Pins
 #define PIN_ANAIN_BATT  37
+#define PIN_ENC_LEFT     34
+#define PIN_ENC_RIGHT    38
+
 
 #define DISP_FONT_NORMAL     2
 #define DISP_FROM_LEFT       10
@@ -12,8 +15,47 @@
 
 
 TFT_eSPI    disp;
+hw_timer_t* timer = nullptr;
 int count = 0;
 float vBatt = 0;
+
+
+// Variablen, die im Interrupt verändert werden, müssen mit "volatile" deklariert werden, sonst werden die Änderungen evtl. nicht sichtbar
+volatile int  countLeft  = 0;
+volatile int  countRight = 0;
+volatile int  lastCountLeft  = 0;
+volatile int  lastCountRight = 0;
+volatile int  speedLeft  = 0;
+volatile int  speedRight = 0;
+volatile bool changed    = true;
+
+
+// Interrupt-Funktion (Interrupt Service Function = ISR) für den linken Sensor
+void IRAM_ATTR isrEncLeft()
+{
+    ++countLeft;
+}
+
+
+// Interrupt-Funktion für den rechten Sensor
+void IRAM_ATTR isrEncRight()
+{
+    ++countRight;
+}
+
+
+// Interrupt-Funktion für den Timer
+void IRAM_ATTR isrTimer()
+{
+    speedLeft = ( countLeft - lastCountLeft );
+    lastCountLeft = countLeft;
+
+    speedRight = ( countRight - lastCountRight );
+    lastCountRight = countRight;
+
+    changed = true;
+}
+
 
 
 
@@ -64,10 +106,38 @@ void displayBatt( float value )
 }
 
 
+void displayValue( int line, int value )
+{
+    disp.drawString( String( value ) + " ", TFT_WIDTH / 2, DISP_FROM_TOP + ( line - 1 ) * disp.fontHeight( DISP_FONT_NORMAL ), DISP_FONT_NORMAL );
+}
+
 
 void setup()
 {
     initDisplay();
+
+
+    pinMode( PIN_ENC_LEFT,  INPUT );
+    pinMode( PIN_ENC_RIGHT, INPUT );
+
+    // Pin-Change-Interrupts setzen und die Interrupt-Funktionen zuweisen
+    attachInterrupt( digitalPinToInterrupt( PIN_ENC_LEFT  ), isrEncLeft,  CHANGE );
+    attachInterrupt( digitalPinToInterrupt( PIN_ENC_RIGHT ), isrEncRight, CHANGE );
+    
+    // Timer erstellen und initialisieren:
+    // - Timer0 verwenden
+    // - Vorteiler (Prescaler) auf 80. Bei einer Taktfrequenz des Mikrocontrollers von 80MHz ergibt das eine Taktfrequenz des Timers von 1MHz
+    // - hochzählen
+    timer = timerBegin( 0, 80, true );
+
+    // mit Interrupt-Funktion verknüpfen
+    timerAttachInterrupt( timer, isrTimer, true );
+
+    // Ende-Wert auf 1000000, also 1000ms setzen mit automatischer Wiederholung
+    timerAlarmWrite( timer, 1000000, true );
+
+    // Timer starten
+    timerAlarmEnable( timer );
 }
 
 
@@ -79,6 +149,16 @@ void loop()
         vBatt = vBattNew;
         displayBatt( vBatt );
     }
- 
-    delay( 10 );
+
+    if ( changed )
+    {
+        changed = false;
+
+        displayValue( 4, countLeft );
+        displayValue( 5, countRight );
+        displayValue( 6, speedLeft * 60 / 96 );
+        displayValue( 7, speedRight * 60 / 96 );
+    }
+
+    delay( 100 );
 }
