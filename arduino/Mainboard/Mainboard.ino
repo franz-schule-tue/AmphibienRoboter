@@ -1,11 +1,12 @@
 
 #include <Wire.h>
 #include <TFT_eSPI.h>
+#include "motor.hpp"
 
 // Definition der Mikrocontroller-Pins
-#define PIN_ANAIN_BATT  37
-#define PIN_ENC_LEFT     34
-#define PIN_ENC_RIGHT    38
+#define PIN_ANAIN_BATT          37
+#define PIN_ENC_LEFT            34
+#define PIN_ENC_RIGHT           38
 #define PIN_MOTOR_P_LEFT        15
 #define PIN_MOTOR_M_LEFT        2
 #define PIN_MOTOR_P_RIGHT       4
@@ -24,11 +25,12 @@
 
 TFT_eSPI    disp;
 hw_timer_t* timer = nullptr;
+Motor       motorLeft{  PIN_MOTOR_P_LEFT,  PIN_MOTOR_M_LEFT,  PWM_CHAN_LEFT,  0 };
+Motor       motorRight{ PIN_MOTOR_P_RIGHT, PIN_MOTOR_M_RIGHT, PWM_CHAN_RIGHT, 1 };
+
+
 int count = 0;
 float vBatt = 0;
-int motorPower = 0;
-int motorState = 0;
-int motorCount = 0;
 
 // Variablen, die im Interrupt verändert werden, müssen mit "volatile" deklariert werden, sonst werden die Änderungen evtl. nicht sichtbar
 volatile int  countLeft  = 0;
@@ -129,99 +131,10 @@ void displayValue( int line, int value )
 }
 
 
-void initMotors()
-{
-    pinMode(      PIN_MOTOR_P_LEFT,  OUTPUT );
-    digitalWrite( PIN_MOTOR_P_LEFT,  LOW );             // LOW: vorwärts, HIGH: rückwärts
-    pinMode(      PIN_MOTOR_P_RIGHT, OUTPUT );
-    digitalWrite( PIN_MOTOR_P_RIGHT, LOW );
-
-    ledcSetup( PWM_CHAN_LEFT,  PWM_FREQ, PWM_RES ); 
-    ledcSetup( PWM_CHAN_RIGHT, PWM_FREQ, PWM_RES ); 
-    ledcAttachPin( PIN_MOTOR_M_LEFT,  PWM_CHAN_LEFT );
-    ledcAttachPin( PIN_MOTOR_M_RIGHT, PWM_CHAN_RIGHT );
-
-    setMotorLeft( 0 );
-    setMotorRight( 0 );
-}
-
-
-int saturate( int value )
-{
-    int res = value;
-    
-    if ( value < -100 )
-    {
-        res = -100;
-    }
-    else if ( value > 100 )
-    {
-        res = 100;
-    }
-    
-    return res;
-}
-
-
-/**
- * Setzt den linken Motor
- * @param value     -100..100
- */
-void setMotorLeft( int value )
-{
-    value = saturate( value );
-    
-    if ( value < 0 )
-    {
-        // rückwärts
-        digitalWrite( PIN_MOTOR_P_LEFT, HIGH );             // LOW: vorwärts, HIGH: rückwärts
-
-        // PWM andersrum. Achtung: value ist negativ
-        ledcWrite( PWM_CHAN_LEFT, 255 - ( -value * 255 / 100 ) );
-    }
-    else
-    {
-        // vorwärts
-        digitalWrite( PIN_MOTOR_P_LEFT, LOW );             // LOW: vorwärts, HIGH: rückwärts
-
-        // PWM richtigrum
-        ledcWrite( PWM_CHAN_LEFT, value * 255 / 100 );
-    }
-}
-
-
-/**
- * Setzt den rechten Motor
- * @param value     -100..100
- */
-void setMotorRight( int value )
-{
-    value = saturate( value );
-
-    if ( value < 0 )
-    {
-        // rückwärts
-        digitalWrite( PIN_MOTOR_P_RIGHT, HIGH );             // LOW: vorwärts, HIGH: rückwärts
-
-        // PWM andersrum. Achtung: value ist negativ
-        ledcWrite( PWM_CHAN_RIGHT, 255 - ( -value * 255 / 100 ) );
-    }
-    else
-    {
-        // vorwärts
-        digitalWrite( PIN_MOTOR_P_RIGHT, LOW );             // LOW: vorwärts, HIGH: rückwärts
-
-        // PWM richtigrum
-        ledcWrite( PWM_CHAN_RIGHT, value * 255 / 100 );
-    }
-}
-
-
 
 void setup()
 {
     initDisplay();
-    initMotors();
 
     pinMode( PIN_ENC_LEFT,  INPUT );
     pinMode( PIN_ENC_RIGHT, INPUT );
@@ -253,7 +166,7 @@ void loop()
     if ( vBattNew != vBatt )
     {
         vBatt = vBattNew;
-        displayBatt( vBatt );
+        displayBatt( vBatt ); 
     }
 
     if ( changed )
@@ -266,61 +179,12 @@ void loop()
         displayValue( 7, speedRight * 60 / 96 );
     }
 
-    if ( motorState == 0 )
-    {
-        // beschleunigen
-        motorPower += 1;
-        setMotorLeft( motorPower );
+    // Motorsteuerung weiterschalten
+    motorLeft.process();
+    motorRight.process();
 
-        if ( motorPower >= 100 )
-        {
-            motorCount = 0;
-            motorState = 1;
-        }
-    }
-    else if ( motorState == 1 )
-    {
-        // Vollgas kurz halten
-        if ( ++motorCount >= 100 )
-        {
-            motorState = 2;
-        }
-    }
-    if ( motorState == 2 )
-    {
-        // verzögern bis rückwärts
-        motorPower -= 1;
-        setMotorLeft( motorPower );
-
-        if ( motorPower <= -100 )
-        {
-            motorCount = 0;
-            motorState = 3;
-        }
-   }
-    else if ( motorState == 3 )
-    {
-        // Rückwärts kurz halten
-        if ( ++motorCount >= 100 )
-        {
-            motorState = 4;
-        }
-   
-    }
-    else if ( motorState == 4 )
-    {
-        // verzögern bis rückwärts
-        motorPower += 1;
-        setMotorLeft( motorPower );
-
-        if ( motorPower >= 0 )
-        {
-            setMotorLeft( 0 );
-            motorState = 1000;
-        }
-    }
-    displayValue( 8, motorPower );
+    // Power des linken Motors anzeigen
+    displayValue( 8, motorLeft.getPower() );
     
-
     delay( 100 );
 }
