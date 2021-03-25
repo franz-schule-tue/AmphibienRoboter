@@ -13,12 +13,11 @@ public:
     /**
      * Konstruktor
      */
-    Motor( int pinPlus, int pinMinus, int pwmChannel, int state )
+    Motor( int pinPlus, int pinMinus, int pwmChannel )
     {
         m_pinPlus    = pinPlus;
         m_pinMinus   = pinMinus;
         m_pwmChannel = pwmChannel;
-        m_state      = state;
         
         pinMode( pinPlus,  OUTPUT );
         digitalWrite( pinPlus,  LOW );             // LOW: vorwärts, HIGH: rückwärts
@@ -57,57 +56,6 @@ public:
     }
 
 
-    int getPower()
-    {
-        return m_power;
-    }
-
-
-    void process()
-    {
-        if ( m_state == 0 )
-        {
-            // beschleunigen
-            m_power += 1;
-            setPower( m_power );
-    
-            if ( m_power >= 100 )
-            {
-                m_count = 0;
-                m_state = 1;
-            }
-        }
-        else if ( m_state == 1 )
-        {
-            // Vollgas kurz halten
-            if ( ++m_count >= 100 )
-            {
-                m_state = 2;
-            }
-        }
-        else if ( m_state == 2 )
-        {
-            // verzögern bis rückwärts
-            m_power -= 1;
-            setPower( m_power );
-    
-            if ( m_power <= -100 )
-            {
-                m_count = 0;
-                m_state = 3;
-            }
-        }
-        else if ( m_state == 3 )
-        {
-            // Rückwärts kurz halten
-            if ( ++m_count >= 100 )
-            {
-                m_state = 0;
-            }
-        }
-    }
-    
-
 private:
     static int saturate( int value )
     {
@@ -131,8 +79,4 @@ private:
     int m_pinPlus;
     int m_pinMinus;
     int m_pwmChannel;
-    int m_power = 0;
-    int m_state = 0;
-    int m_count = 0;
-
  };

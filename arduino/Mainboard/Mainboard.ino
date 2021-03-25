@@ -1,6 +1,8 @@
 
 #include <Wire.h>
 #include <TFT_eSPI.h>
+#include <BluetoothSerial.h>
+
 #include "motor.hpp"
 
 // Definition der Mikrocontroller-Pins
@@ -13,24 +15,26 @@
 #define PIN_MOTOR_M_RIGHT       0
 #define PWM_CHAN_LEFT           0
 #define PWM_CHAN_RIGHT          1  
-#define PWM_FREQ                1000
-#define PWM_RES                 8          
-
 
 #define DISP_FONT_NORMAL     2
 #define DISP_FROM_LEFT       10
 #define DISP_FROM_TOP        2
 #define DISP_CENTER          64
 
+#define PERIOD_BATT          1000
+
 
 TFT_eSPI    disp;
+BluetoothSerial bt;
 hw_timer_t* timer = nullptr;
-Motor       motorLeft{  PIN_MOTOR_P_LEFT,  PIN_MOTOR_M_LEFT,  PWM_CHAN_LEFT,  0 };
-Motor       motorRight{ PIN_MOTOR_P_RIGHT, PIN_MOTOR_M_RIGHT, PWM_CHAN_RIGHT, 1 };
+Motor       motorLeft{  PIN_MOTOR_P_LEFT,  PIN_MOTOR_M_LEFT,  PWM_CHAN_LEFT  };
+Motor       motorRight{ PIN_MOTOR_P_RIGHT, PIN_MOTOR_M_RIGHT, PWM_CHAN_RIGHT };
 
 
 int count = 0;
 float vBatt = 0;
+unsigned long alarmBatt = 0;
+
 
 // Variablen, die im Interrupt verändert werden, müssen mit "volatile" deklariert werden, sonst werden die Änderungen evtl. nicht sichtbar
 volatile int  countLeft  = 0;
@@ -89,12 +93,12 @@ void initDisplay()
 float measureBatt()
 {
     // so wäre es nach der Theorie:
-    //return analogRead( PIN_ANAIN_BATT ) /** 3.3 / 4095.0 * ( 5600.0 + 3300.0 ) / 3300.0*/;
+    //return analogRead( PIN_ANAIN_BATT ); //* 3.3 / 4095.0 * ( 5600.0 + 3300.0 ) / 3300.0;
 
     // tatsächlich scheint der ESP32 laut Datenblatt keine so genaue interne Referenzspannung zu haben und auch
     // zu den höherne Werten hin etwas ungenauer zu sein. Daher haben wir die genauen Werte durch Kalibrierung ermittelt,
     // wobei wir sogar einen Offset beobachtet haben:
-    return 0.00224966 * analogRead( PIN_ANAIN_BATT ) + 0.3233;
+    return 0.002243 * analogRead( PIN_ANAIN_BATT ) + 0.3257;
 }
 
 
@@ -157,16 +161,34 @@ void setup()
 
     // Timer starten
     timerAlarmEnable( timer );
+
+    bt.begin( "ESP32" );
 }
 
 
 void loop()
 {
-    float vBattNew = measureBatt();
-    if ( vBattNew != vBatt )
+    unsigned long now = millis();
+
+    if ( now >= alarmBatt )
     {
-        vBatt = vBattNew;
-        displayBatt( vBatt ); 
+        // es ist wieder Zeit für die nächste Batteriemessung
+
+        alarmBatt += PERIOD_BATT;
+        
+        float vBattNew = measureBatt();
+        if ( vBattNew != vBatt )
+        {
+            vBatt = vBattNew;
+            displayBatt( vBatt ); 
+        }
+
+        if ( bt.hasClient() )
+        {
+            bt.print( "BA");
+            bt.print( vBatt );
+            bt.print( ";" );
+        }
     }
 
     if ( changed )
@@ -177,14 +199,35 @@ void loop()
         displayValue( 5, countRight );
         displayValue( 6, speedLeft * 60 / 96 );
         displayValue( 7, speedRight * 60 / 96 );
+
+        if ( bt.hasClient() )
+        {
+            bt.print( "CL" );
+            bt.print( countLeft );
+            bt.print( ";" );
+            bt.print( "CR" );
+            bt.print( countRight );
+            bt.print( ";" );
+            bt.print( "SL" );
+            bt.print( speedLeft * 60 / 96 );
+            bt.print( ";" );
+            bt.print( "SR" );
+            bt.print( speedRight * 60 / 96 );
+            bt.print( ";" );
+        }
     }
 
-    // Motorsteuerung weiterschalten
-    motorLeft.process();
-    motorRight.process();
 
-    // Power des linken Motors anzeigen
-    displayValue( 8, motorLeft.getPower() );
-    
-    delay( 100 );
+    if ( bt.available() )
+    {
+        String rd = bt.readStringUntil( ';' );
+        if ( rd.startsWith( "ML" ) )
+        {
+            motorLeft.setPower( rd.substring( 2 ).toInt() );
+        }
+        else if ( rd.startsWith( "MR" ) )
+        {
+            motorRight.setPower( rd.substring( 2 ).toInt() );
+        }
+    }
 }
