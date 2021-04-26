@@ -13,6 +13,9 @@
 #define PIN_MOTOR_M_LEFT        2
 #define PIN_MOTOR_P_RIGHT       4
 #define PIN_MOTOR_M_RIGHT       0
+#define PIN_US_TRIG1            26
+#define PIN_US_TRIG2            25
+#define PIN_US_ECHO             32
 #define PWM_CHAN_LEFT           0
 #define PWM_CHAN_RIGHT          1  
 
@@ -34,6 +37,10 @@ Motor       motorRight{ PIN_MOTOR_P_RIGHT, PIN_MOTOR_M_RIGHT, PWM_CHAN_RIGHT };
 int count = 0;
 float vBatt = 0;
 unsigned long alarmBatt = 0;
+float us1;
+float lastUs1 = -1;
+float us2;
+float lastUs2 = -1;
 
 
 // Variablen, die im Interrupt verändert werden, müssen mit "volatile" deklariert werden, sonst werden die Änderungen evtl. nicht sichtbar
@@ -102,6 +109,20 @@ float measureBatt()
 }
 
 
+float measureDistanceCm( int pinTrigger )
+{
+    digitalWrite( pinTrigger, LOW );
+    delayMicroseconds( 3 );
+    digitalWrite( pinTrigger, HIGH );
+    delayMicroseconds( 10 );
+    digitalWrite( pinTrigger, LOW );
+
+    long pulseLength = pulseIn( PIN_US_ECHO, HIGH );
+
+    return ( pulseLength / 2 ) / 29.4;
+}
+
+
 void displayBatt( float value )
 {
     if ( value < 6.0 )
@@ -125,13 +146,13 @@ void displayBatt( float value )
     disp.drawString( String( value ), TFT_WIDTH / 2, DISP_FROM_TOP, DISP_FONT_NORMAL );
 
     disp.setTextColor( TFT_WHITE, TFT_BLACK );    
-    disp.drawString( String( value ), DISP_FROM_LEFT, DISP_FROM_TOP + 10 + 7 * disp.fontHeight( DISP_FONT_NORMAL ), 4 );
+    //disp.drawString( String( value ), DISP_FROM_LEFT, DISP_FROM_TOP + 10 + 7 * disp.fontHeight( DISP_FONT_NORMAL ), 4 );
 }
 
 
 void displayValue( int line, int value )
 {
-    disp.drawString( String( value ) + " ", TFT_WIDTH / 2, DISP_FROM_TOP + ( line - 1 ) * disp.fontHeight( DISP_FONT_NORMAL ), DISP_FONT_NORMAL );
+    disp.drawString( String( value ) + "  ", TFT_WIDTH / 2, DISP_FROM_TOP + ( line - 1 ) * disp.fontHeight( DISP_FONT_NORMAL ), DISP_FONT_NORMAL );
 }
 
 
@@ -146,7 +167,12 @@ void setup()
     // Pin-Change-Interrupts setzen und die Interrupt-Funktionen zuweisen
     attachInterrupt( digitalPinToInterrupt( PIN_ENC_LEFT  ), isrEncLeft,  CHANGE );
     attachInterrupt( digitalPinToInterrupt( PIN_ENC_RIGHT ), isrEncRight, CHANGE );
-    
+
+    pinMode( PIN_US_TRIG1,  OUTPUT );
+    pinMode( PIN_US_TRIG2,  OUTPUT );
+    pinMode( PIN_US_ECHO,   INPUT );
+
+
     // Timer erstellen und initialisieren:
     // - Timer0 verwenden
     // - Vorteiler (Prescaler) auf 80. Bei einer Taktfrequenz des Mikrocontrollers von 80MHz ergibt das eine Taktfrequenz des Timers von 1MHz
@@ -191,10 +217,29 @@ void loop()
         }
     }
 
+    // Abstandssensoren abfragen
+    // TODO: im Interrupt.   timerRead(hw_timer_t *timer)
+    us1 = measureDistanceCm( PIN_US_TRIG1 );
+    if ( us1 != lastUs1 )
+    {
+        lastUs1 = us1;
+        changed = true;
+    }
+    
+    us2 = measureDistanceCm( PIN_US_TRIG2 );
+    if ( us2 != lastUs2 )
+    {
+        lastUs2 = us2;
+        changed = true;
+    }
+    
+    
     if ( changed )
     {
         changed = false;
 
+        displayValue( 2, us1 );
+        displayValue( 3, us2 );
         displayValue( 4, countLeft );
         displayValue( 5, countRight );
         displayValue( 6, speedLeft * 60 / 96 );
