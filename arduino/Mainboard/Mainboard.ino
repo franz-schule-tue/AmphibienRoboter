@@ -4,6 +4,7 @@
 #include <BluetoothSerial.h>
 
 #include "motor.hpp"
+#include "us_sensor.hpp"
 
 // Definition der Mikrocontroller-Pins
 #define PIN_ANAIN_BATT          37
@@ -27,20 +28,22 @@
 #define PERIOD_BATT          1000
 
 
-TFT_eSPI    disp;
+TFT_eSPI        disp;
 BluetoothSerial bt;
-hw_timer_t* timer = nullptr;
-Motor       motorLeft{  PIN_MOTOR_P_LEFT,  PIN_MOTOR_M_LEFT,  PWM_CHAN_LEFT  };
-Motor       motorRight{ PIN_MOTOR_P_RIGHT, PIN_MOTOR_M_RIGHT, PWM_CHAN_RIGHT };
-
+hw_timer_t*     timer = nullptr;
+Motor           motorLeft{  PIN_MOTOR_P_LEFT,  PIN_MOTOR_M_LEFT,  PWM_CHAN_LEFT  };
+Motor           motorRight{ PIN_MOTOR_P_RIGHT, PIN_MOTOR_M_RIGHT, PWM_CHAN_RIGHT };
+USSensorControl usControl{ PIN_US_ECHO, 1 };
+USSensor*       usFront = nullptr;
+USSensor*       usBack  = nullptr;
 
 int count = 0;
 float vBatt = 0;
 unsigned long alarmBatt = 0;
-float us1;
-float lastUs1 = -1;
-float us2;
-float lastUs2 = -1;
+int us1;
+int lastUs1 = -1;
+int us2;
+int lastUs2 = -1;
 
 
 // Variablen, die im Interrupt verändert werden, müssen mit "volatile" deklariert werden, sonst werden die Änderungen evtl. nicht sichtbar
@@ -109,20 +112,6 @@ float measureBatt()
 }
 
 
-float measureDistanceCm( int pinTrigger )
-{
-    digitalWrite( pinTrigger, LOW );
-    delayMicroseconds( 3 );
-    digitalWrite( pinTrigger, HIGH );
-    delayMicroseconds( 10 );
-    digitalWrite( pinTrigger, LOW );
-
-    long pulseLength = pulseIn( PIN_US_ECHO, HIGH );
-
-    return ( pulseLength / 2 ) / 29.4;
-}
-
-
 void displayBatt( float value )
 {
     if ( value < 6.0 )
@@ -156,6 +145,23 @@ void displayValue( int line, int value )
 }
 
 
+void outputIfChanged( USSensor* sensor, int line, const char* name )
+{
+    if ( sensor->hasChanged() )
+    {
+        int dist = sensor->getDistance();
+        displayValue( line, dist );
+
+        if ( bt.hasClient() )
+        {
+            bt.print( name );
+            bt.print( dist );
+            bt.print( ";" );
+        }
+    }
+}
+
+
 
 void setup()
 {
@@ -168,10 +174,9 @@ void setup()
     attachInterrupt( digitalPinToInterrupt( PIN_ENC_LEFT  ), isrEncLeft,  CHANGE );
     attachInterrupt( digitalPinToInterrupt( PIN_ENC_RIGHT ), isrEncRight, CHANGE );
 
-    pinMode( PIN_US_TRIG1,  OUTPUT );
-    pinMode( PIN_US_TRIG2,  OUTPUT );
-    pinMode( PIN_US_ECHO,   INPUT );
-
+    usFront = usControl.createSensor( PIN_US_TRIG1 );
+    usBack  = usControl.createSensor( PIN_US_TRIG2 );
+  
 
     // Timer erstellen und initialisieren:
     // - Timer0 verwenden
@@ -189,7 +194,14 @@ void setup()
     timerAlarmEnable( timer );
 
     bt.begin( "ESP32" );
+
+    Serial.begin( 115200 );
+    Serial.println( "Hallo!\r\n" );
+
+    usControl.start();
 }
+
+
 
 
 void loop()
@@ -217,29 +229,13 @@ void loop()
         }
     }
 
-    // Abstandssensoren abfragen
-    // TODO: im Interrupt.   timerRead(hw_timer_t *timer)
-    us1 = measureDistanceCm( PIN_US_TRIG1 );
-    if ( us1 != lastUs1 )
-    {
-        lastUs1 = us1;
-        changed = true;
-    }
-    
-    us2 = measureDistanceCm( PIN_US_TRIG2 );
-    if ( us2 != lastUs2 )
-    {
-        lastUs2 = us2;
-        changed = true;
-    }
-    
+    outputIfChanged( usFront, 2, "DF" );
+    outputIfChanged( usBack,  3, "DB" );
     
     if ( changed )
     {
         changed = false;
 
-        displayValue( 2, us1 );
-        displayValue( 3, us2 );
         displayValue( 4, countLeft );
         displayValue( 5, countRight );
         displayValue( 6, speedLeft * 60 / 96 );
