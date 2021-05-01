@@ -195,8 +195,9 @@ void setup()
 
     bt.begin( "ESP32" );
 
-    Serial.begin( 115200 );
-    Serial.println( "Hallo!\r\n" );
+    // für Debug-Ausgaben:
+    //Serial.begin( 115200 );
+    //Serial.println( "Hallo!\r\n" );
 
     usControl.start();
 }

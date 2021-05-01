@@ -24,9 +24,8 @@ public:
         if ( cm != m_lastMeasurement )
         {
             m_hasChanged = true;
+            m_lastMeasurement = cm;
         }
-        
-        m_lastMeasurement = cm;
     }
     
 
@@ -141,7 +140,11 @@ public:
      */
     void notifyStart()
     {
-        m_startTime = esp_timer_get_time();
+        // nur dann ausführen, wenn wirklich getriggert wurde, sonst sind es Fehlimpulse
+        if ( m_hasTriggered )
+        {
+            m_startTime = esp_timer_get_time();
+        }
     }
 
 
@@ -151,22 +154,29 @@ public:
      */
     void notifyStop()
     {
-        // kleiner Trick: statt "Zeitdifferenz / 2 / 29.4" rechnen wir mit dem Zehnfachen,
-        //                also  "Zeitdifferenz * 5 / 294", um das Rechnen mit Fließkommazahlen zu vermeiden:
-        
-        int64_t cm = ( ( esp_timer_get_time() - m_startTime ) * 5 ) / 294;
-
-        // berechneten Abstand an das Sensor-Objekt weitergeben, damit es später von dort abgefragt werden kann
-        m_sensors[ m_currSensorIdx ].setDistance( (int) cm );
-
-        // nächsten Sensor vormerken
-        if ( ++m_currSensorIdx >= US_SENSOR_MAX_COUNT )
+        // nur dann ausführen, wenn wirklich getriggert wurde, sonst sind es Fehlimpulse
+        if ( m_hasTriggered )
         {
-            m_currSensorIdx = 0;
+            // OK, Impuls fertig, also Trigger-Flag zurücksetzen
+            m_hasTriggered = false;
+            
+            // kleiner Trick: statt "Zeitdifferenz / 2 / 29.4" rechnen wir mit dem Zehnfachen,
+            //                also  "Zeitdifferenz * 5 / 294", um das Rechnen mit Fließkommazahlen zu vermeiden:
+            
+            int64_t cm = ( ( esp_timer_get_time() - m_startTime ) * 5 ) / 294;
+    
+            // berechneten Abstand an das Sensor-Objekt weitergeben, damit es später von dort abgefragt werden kann
+            m_sensors[ m_currSensorIdx ].setDistance( (int) cm );
+    
+            // nächsten Sensor vormerken
+            if ( ++m_currSensorIdx >= US_SENSOR_MAX_COUNT )
+            {
+                m_currSensorIdx = 0;
+            }
+    
+            // Bevor wir den nächsten Sensor triggern, warten wir kurz, um alle Echos loszuwerden. Dafür wird der Timer gestartet
+            triggerTimer( 100000 );      // Mikrosekunden!
         }
-
-        // Bevor wir den nächsten Sensor triggern, warten wir kurz, um alle Echos loszuwerden. Dafür wird der Timer gestartet
-        triggerTimer( 50000 );      // Mikrosekunden!
     }
 
 
@@ -177,7 +187,7 @@ public:
     void notifyTimer()
     {
         timerStop( m_timer ); 
-        m_sensors[ m_currSensorIdx ].trigger();
+        triggerCurrentSensor();
     }
 
 
@@ -187,7 +197,7 @@ public:
     void start()
     {
         m_currSensorIdx = 0;
-        m_sensors[ m_currSensorIdx ].trigger();
+        triggerCurrentSensor();
     }
     
 
@@ -199,6 +209,12 @@ private:
     hw_timer_t*             m_timer;
     int                     m_currSensorIdx = 0;
     int64_t                 m_startTime;
+
+    /** Wenn der Sensor kein Echo empfängt, ist die fallende Flanke des Echo-Ausgangs recht langsam,
+     *  was zu Fehlauslösungen des Pin-Change-Interrupts führt. Über dieses Flag wird erreicht, dass nur 
+     *  der jeweils erste Interrupt wirklich zählt und alle weiteren ignoriert werden.
+     */
+    bool                    m_hasTriggered = false;
 
 
 
@@ -215,6 +231,16 @@ private:
         
         // Timer laufen lassen
         timerStart( m_timer ); 
+    }
+
+
+    /**
+     * Triggert den aktuell eingestellten Sensor durch Aufrufen dessen trigger()-Funktion
+     */
+    void triggerCurrentSensor()
+    {
+        m_sensors[ m_currSensorIdx ].trigger();
+        m_hasTriggered = true;
     }
 };
 
