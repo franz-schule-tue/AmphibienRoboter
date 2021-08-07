@@ -17,6 +17,7 @@
 #define PIN_US_TRIG1            26
 #define PIN_US_TRIG2            25
 #define PIN_US_ECHO             32
+#define PIN_WATER_SENS          35
 #define PWM_CHAN_LEFT           0
 #define PWM_CHAN_RIGHT          1  
 
@@ -44,6 +45,7 @@ int us1;
 int lastUs1 = -1;
 int us2;
 int lastUs2 = -1;
+boolean isInWater;
 
 
 // Variablen, die im Interrupt verändert werden, müssen mit "volatile" deklariert werden, sonst werden die Änderungen evtl. nicht sichtbar
@@ -54,6 +56,7 @@ volatile int  lastCountRight = 0;
 volatile int  speedLeft  = 0;
 volatile int  speedRight = 0;
 volatile bool changed    = true;
+volatile bool connected  = false;
 
 
 // Interrupt-Funktion (Interrupt Service Function = ISR) für den linken Sensor
@@ -83,6 +86,21 @@ void IRAM_ATTR isrTimer()
 }
 
 
+void onBluetoothEvent(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
+{
+    if (  event == ESP_SPP_SRV_OPEN_EVT )
+    {
+        // verbunden
+        connected = true;
+    }
+    else if(event == ESP_SPP_CLOSE_EVT )
+    {
+        // unterbrochen 
+        connected = false;
+        motorLeft.setPower( 0 );
+        motorRight.setPower( 0 );
+    }
+}
 
 
 void initDisplay()
@@ -97,6 +115,8 @@ void initDisplay()
     disp.drawString( "Imp.  R",  DISP_FROM_LEFT, DISP_FROM_TOP + 4 * disp.fontHeight( DISP_FONT_NORMAL ), DISP_FONT_NORMAL );
     disp.drawString( "GeschwL",  DISP_FROM_LEFT, DISP_FROM_TOP + 5 * disp.fontHeight( DISP_FONT_NORMAL ), DISP_FONT_NORMAL );
     disp.drawString( "GeschwR",  DISP_FROM_LEFT, DISP_FROM_TOP + 6 * disp.fontHeight( DISP_FONT_NORMAL ), DISP_FONT_NORMAL );
+    disp.drawString( "connect",  DISP_FROM_LEFT, DISP_FROM_TOP + 7 * disp.fontHeight( DISP_FONT_NORMAL ), DISP_FONT_NORMAL );
+    disp.drawString( "water",    DISP_FROM_LEFT, DISP_FROM_TOP + 8 * disp.fontHeight( DISP_FONT_NORMAL ), DISP_FONT_NORMAL );
 }
 
 
@@ -167,8 +187,9 @@ void setup()
 {
     initDisplay();
 
-    pinMode( PIN_ENC_LEFT,  INPUT );
-    pinMode( PIN_ENC_RIGHT, INPUT );
+    pinMode( PIN_ENC_LEFT,   INPUT );
+    pinMode( PIN_ENC_RIGHT,  INPUT );
+    pinMode( PIN_WATER_SENS, INPUT_PULLUP );
 
     // Pin-Change-Interrupts setzen und die Interrupt-Funktionen zuweisen
     attachInterrupt( digitalPinToInterrupt( PIN_ENC_LEFT  ), isrEncLeft,  CHANGE );
@@ -187,12 +208,13 @@ void setup()
     // mit Interrupt-Funktion verknüpfen
     timerAttachInterrupt( timer, isrTimer, true );
 
-    // Ende-Wert auf 1000000, also 1000ms setzen mit automatischer Wiederholung
-    timerAlarmWrite( timer, 1000000, true );
+    // Ende-Wert auf 500000, also 500ms setzen mit automatischer Wiederholung
+    timerAlarmWrite( timer, 500000, true );
 
     // Timer starten
     timerAlarmEnable( timer );
 
+    bt.register_callback( onBluetoothEvent );
     bt.begin( "ESP32" );
 
     // für Debug-Ausgaben:
@@ -232,6 +254,8 @@ void loop()
 
     outputIfChanged( usFront, 2, "DF" );
     outputIfChanged( usBack,  3, "DB" );
+
+    isInWater = digitalRead( PIN_WATER_SENS ) == LOW;
     
     if ( changed )
     {
@@ -239,8 +263,10 @@ void loop()
 
         displayValue( 4, countLeft );
         displayValue( 5, countRight );
-        displayValue( 6, speedLeft * 60 / 96 );
-        displayValue( 7, speedRight * 60 / 96 );
+        displayValue( 6, speedLeft * 120 / 96 );
+        displayValue( 7, speedRight * 120 / 96 );
+        displayValue( 8, connected );
+        displayValue( 9, isInWater );
 
         if ( bt.hasClient() )
         {
@@ -251,10 +277,10 @@ void loop()
             bt.print( countRight );
             bt.print( ";" );
             bt.print( "SL" );
-            bt.print( speedLeft * 60 / 96 );
+            bt.print( speedLeft * 120 / 96 );
             bt.print( ";" );
             bt.print( "SR" );
-            bt.print( speedRight * 60 / 96 );
+            bt.print( speedRight * 120 / 96 );
             bt.print( ";" );
         }
     }
